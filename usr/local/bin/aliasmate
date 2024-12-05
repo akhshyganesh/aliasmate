@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# Source the other scripts
+source "$(dirname "$0")/config"
+source "$(dirname "$0")/autocomplete"
+source "$(dirname "$0")/commands"
+source "$(dirname "$0")/utils"
+
+check_version
+
+# Main logic to parse arguments
+case "$1" in
+    --help)
+        show_help
+        exit 0
+        ;;
+    --version | -v)
+        VERSION=$(dpkg-query -W -f='${Version}' aliasmate)
+        echo "aliasmate version $VERSION"
+        exit 0
+        ;;
+    save)
+        if [ -z "$2" ] || [ -z "$3" ]; then
+            echo "Usage: $0 save <alias> <command>"
+            exit 1
+        fi
+        save_command "$2" "$3"
+        ;;
+    run)
+        if [ -z "$2" ]; then
+            echo "Usage: $0 run <alias> [--path <custom_path>] [--args <additional_args>]"
+            exit 1
+        fi
+
+        # Pass all arguments after "run" to the `run_command` function
+        shift # Remove the "run" keyword
+        run_command "$@"
+        ;;
+    edit)
+        if [ -z "$2" ]; then
+            echo "Usage: $0 edit <alias>"
+            exit 1
+        fi
+
+        # Pass all arguments after "edit" to the `edit_alias` function
+        shift # Remove the "edit" keyword
+        edit_alias "$@"
+        ;;
+    ls | list)
+        list_commands
+        ;;
+    rm | remove)
+        if [ -z "$2" ]; then
+            echo "Usage: $0 remove <alias>"
+            exit 1
+        fi
+        remove_alias "$2"
+        ;;
+    export)
+        export_aliases "$2"
+        ;;
+    import)
+        if [ -z "$2" ]; then
+            echo "Usage: $0 import <file>"
+            exit 1
+        fi
+        import_aliases "$2"
+        ;;
+    rm-all)
+        remove_all_aliases
+        ;;
+    --update | --upgrade)
+        upgrade_aliasmate
+        ;;
+    *)
+        echo "Unknown command: $1 $2"
+        show_help
+        exit 1
+        ;;
+esac

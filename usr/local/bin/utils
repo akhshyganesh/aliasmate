@@ -1,0 +1,108 @@
+#!/bin/bash
+
+
+check_version() {
+    # Variables
+    REPO="akhshyganesh/aliasmate"
+    API_URL="https://api.github.com/repos/$REPO/releases/latest"
+    CACHE_FILE="$HOME/.aliasmate_latest_version"
+    LOCAL_VERSION=$(dpkg-query -W -f='${Version}' aliasmate 2>/dev/null)
+
+    # Strip any 'v' prefix from the local version (just in case)
+    LOCAL_VERSION=${LOCAL_VERSION#v}
+
+    # Check if the cache file exists and is less than a day old
+    if [ -f "$CACHE_FILE" ]; then
+        if [ $(( $(date +%s) - $(stat -c %Y "$CACHE_FILE") )) -lt 86400 ]; then
+            # Use the cached version
+            LATEST_VERSION=$(cat "$CACHE_FILE")
+        else
+            # Refresh the cache
+            LATEST_VERSION=$(curl -s --max-time 3 "$API_URL" | jq -r .tag_name || echo "")
+            if [[ -n "$LATEST_VERSION" && "$LATEST_VERSION" != "null" ]]; then
+                echo "$LATEST_VERSION" > "$CACHE_FILE"
+            fi
+        fi
+    else
+        # No cache file; fetch the version from the API
+        LATEST_VERSION=$(curl -s --max-time 3 "$API_URL" | jq -r .tag_name || echo "")
+        if [[ -n "$LATEST_VERSION" && "$LATEST_VERSION" != "null" ]]; then
+            echo "$LATEST_VERSION" > "$CACHE_FILE"
+        fi
+    fi
+
+    # If no latest version is available, fail silently
+    if [[ -z "$LATEST_VERSION" || "$LATEST_VERSION" == "null" ]]; then
+        return
+    fi
+
+    # Strip 'v' prefix from the latest version
+    LATEST_VERSION=${LATEST_VERSION#v}
+
+    # Compare versions
+    if dpkg --compare-versions "$LOCAL_VERSION" lt "$LATEST_VERSION"; then
+        echo
+        echo -e "\e[31mA new version of aliasmate is available: $LATEST_VERSION (current: $LOCAL_VERSION).\e[0m"
+        echo -e "\e[31mRun 'aliasmate --upgrade' to update to the latest version.\e[0m"
+        echo
+        echo
+    fi
+}
+
+
+loading_spinner() {
+    spinner="|/-\\"
+    while true; do
+        for i in $(seq 0 3); do
+            # Print the spinner and use \r to return to the beginning of the line
+            echo -n "${spinner:$i:1}" "\r"
+            sleep 0.1
+        done
+    done
+}
+
+
+upgrade_aliasmate() {
+    echo "Starting self-update process..."
+    
+    # Start the loading spinner in the background
+    loading_spinner &
+    SPINNER_PID=$!
+    
+    # Step 1: Download the latest installer script
+    TEMP_DIR=$(mktemp -d)
+    INSTALLER_SCRIPT="$TEMP_DIR/installer.sh"
+    echo "Downloading the latest version of aliasmate..."
+    wget -q --show-progress -O "$INSTALLER_SCRIPT" https://raw.githubusercontent.com/akhshyganesh/aliasmate/develop/installer.sh
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to download the installer script."
+        rm -rf "$TEMP_DIR"
+        kill $SPINNER_PID
+        exit 1
+    fi
+    
+    # Step 2: Uninstall the current version
+    echo "Uninstalling the current version of aliasmate..."
+    if command -v dpkg >/dev/null; then
+        sudo dpkg -r aliasmate
+    else
+        echo "Removing aliasmate files manually..."
+        rm -rf "$HOME/.alias_mate"
+    fi
+    
+    # Step 3: Reinstall aliasmate
+    echo "Reinstalling aliasmate..."
+    bash "$INSTALLER_SCRIPT"
+    if [ $? -eq 0 ]; then
+        echo "aliasmate has been updated successfully!"
+    else
+        echo "Error: Reinstallation failed."
+    fi
+    
+    # Kill the spinner after the update
+    kill $SPINNER_PID
+    rm -rf "$TEMP_DIR"
+    
+    echo "Update complete!"
+    exit
+}

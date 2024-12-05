@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# Function to load command history from ~/.bash_history
+load_command_history() {
+    history -r ~/.bash_history
+}
+
+# Function to save commands to ~/.bash_history
+save_to_history() {
+    local command="$*"
+    if [ -n "$command" ]; then
+        echo "$command" >> ~/.bash_history
+        history -a
+    fi
+}
+
+# Autocomplete function
+autocomplete() {
+    load_command_history  # Ensure history is loaded
+    local cur="${COMP_WORDS[COMP_CWORD]}"  # Current word being completed
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"  # Previous word
+    local aliasmate_commands="save run ls rm export import rm-all update upgrade --help --version"
+
+    case "$prev" in
+        run|rm)
+            # Suggest aliases saved using "aliasmate save"
+            local suggestions=$(grep -Eo 'aliasmate save [^ ]+' ~/.bash_history | awk '{print $3}' | sort -u)
+            COMPREPLY=($(compgen -W "$suggestions" -- "$cur"))
+            ;;
+        save)
+            # Suggest recent command history for saving
+            local history_suggestions=$(history | awk '{$1=""; print substr($0,2)}' | sort -u | tail -n 20)
+            COMPREPLY=($(compgen -W "$history_suggestions" -- "$cur"))
+            ;;
+        *)
+            # Default suggestions for aliasmate commands
+            COMPREPLY=($(compgen -W "$aliasmate_commands" -- "$cur"))
+            ;;
+    esac
+}
+
+# Register the autocomplete function
+complete -F autocomplete aliasmate

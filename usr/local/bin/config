@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Configuration settings can go here
+COMMAND_STORE="$HOME/.alias_mate"
+
+# Function to show help message
+show_help() {
+    cat << EOF
+Usage: aliasmate [OPTIONS] COMMAND [ARGUMENTS]
+
+A tool to manage aliases with associated commands and default paths.
+
+Options:
+  --help                    Show this help message and exit
+  --version, -v             Show the version of the installed package
+  --update, --upgrade       Self-update the aliasmate application
+
+  ls                        List all saved commands with their aliases and default paths
+  rm <alias>                Remove a saved alias
+  export [alias]            Export aliases to a file (or all if no alias is provided)
+  import <file>             Import aliases from a file
+  rm-all                    Remove all saved aliases
+  save <alias> <command>    Save a command with an alias
+  run <alias> --path <path> --args <args> Run a saved command by alias with an optional custom path
+
+Examples:
+  aliasmate save myalias "echo Hello, World!"
+  aliasmate run myalias
+  aliasmate ls
+  aliasmate rm myalias
+  aliasmate export
+  aliasmate import myaliases.txt
+  aliasmate --upgrade
+EOF
+}
+
+# Save the current command to history (avoid recursion)
+if [[ "$BASH_SOURCE" == "$0" ]]; then
+    save_to_history "$0 $*"
+fi
