@@ -1,0 +1,316 @@
+#!/bin/bash
+
+COMMAND_STORE="$HOME/.alias_mate"
+mkdir -p "$COMMAND_STORE"
+
+save_command() {
+    local alias_name="$1"
+    local command_to_save="$2"
+    local default_path="$(pwd)"
+    
+    # Check if --multi flag is passed
+    if [[ "$command_to_save" == "--multi" ]]; then
+        # Prompt the user to edit the command in an editor (e.g., nano or the default editor)
+        echo "Opening editor to input multi-line command..."
+        ${EDITOR:-nano} "$COMMAND_STORE/$alias_name.cmd"
+
+        # After editing, set the default path
+        echo "$default_path" > "$COMMAND_STORE/$alias_name.path"
+
+        echo "Command saved as alias '$alias_name' with default path '$default_path'."
+    else
+        # Save the single-line command as usual
+        echo "$command_to_save" > "$COMMAND_STORE/$alias_name.cmd"
+        echo "$default_path" > "$COMMAND_STORE/$alias_name.path"
+        echo "Command saved as alias '$alias_name' with default path '$default_path'."
+    fi
+}
+
+
+
+run_command() {
+    local alias_name=""
+    local custom_path=""
+    local additional_args=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --path)
+                custom_path="$2"
+                shift 2
+                ;;
+            --args)
+                additional_args="$2"
+                shift 2
+                ;;
+            *)
+                if [[ -z "$alias_name" ]]; then
+                    alias_name="$1"
+                else
+                    echo "Error: Unknown argument '$1'"
+                    return 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Validate alias name
+    if [[ -z "$alias_name" ]]; then
+        echo "Error: Alias name is required!"
+        return 1
+    fi
+
+    # Validate alias file existence
+    if [ ! -f "$COMMAND_STORE/$alias_name.cmd" ]; then
+        echo "Error: Alias '$alias_name' not found!"
+        return 1
+    fi
+
+    # Read command and path from store
+    local command=$(cat "$COMMAND_STORE/$alias_name.cmd")
+    local default_path=$(cat "$COMMAND_STORE/$alias_name.path")
+    local path_to_use="${custom_path:-$default_path}"
+
+    # Validate path existence
+    if [ ! -d "$path_to_use" ]; then
+        echo "Error: Path '$path_to_use' does not exist!"
+        return 1
+    fi
+
+    # Debugging: Print constructed command before execution
+    echo "Running command: (cd \"$path_to_use\" && bash -c \"$command $additional_args\")"
+
+    # Execute the command in the specified path with additional arguments
+    (cd "$path_to_use" && bash -c "$command $additional_args")
+}
+
+
+
+edit_alias() {
+    local alias_name="$1"
+    local flag="$2"  # Either --cmd or --path
+
+    # Check if alias name is provided
+    if [ -z "$alias_name" ]; then
+        echo "Error: Alias name is required!"
+        echo "Usage: aliasmate edit <alias> [--cmd | --path]"
+        return 1
+    fi
+
+    # Check if alias exists
+    if [ ! -f "$COMMAND_STORE/$alias_name.cmd" ]; then
+        echo "Error: Alias '$alias_name' not found!"
+        return 1
+    fi
+
+    # Get the current command and path
+    local current_command=$(<"$COMMAND_STORE/$alias_name.cmd")
+    local current_path=$(<"$COMMAND_STORE/$alias_name.path")
+
+    # Function to edit a file content
+    edit_file() {
+        local file_content="$1"
+        local file_path="$2"
+        local validate_fn="$3"
+        local error_message="$4"
+        local unchanged_message="$5"
+
+        # Create a temporary file and edit
+        local temp_file
+        temp_file=$(mktemp)
+        echo "$file_content" > "$temp_file"
+        ${EDITOR:-nano} "$temp_file"
+        local updated_content
+        updated_content=$(<"$temp_file")
+
+        # Validate the updated content
+        # TODO: fix validation fn
+        # if ! "$validate_fn" "$updated_content"; then
+        #     echo "$error_message"
+        #     rm -f "$temp_file"
+        #     return 1
+        # fi
+
+        # Check if content is unchanged
+        if [ "$updated_content" == "$file_content" ]; then
+            echo "$unchanged_message"
+            rm -f "$temp_file"
+            return 0  # No changes made, exit without error
+        fi
+
+        # Save updated content to file
+        echo "$updated_content" > "$file_path"
+        echo "Updated successfully!"
+
+        # Clean up temporary file
+        rm -f "$temp_file"
+    }
+
+    # Handle different flags
+    case "$flag" in
+        --cmd)
+            # Edit command only
+            echo "Editing the command for alias '$alias_name'..."
+            edit_file "$current_command" "$COMMAND_STORE/$alias_name.cmd" \
+                'test -n "$1"' "Error: Command cannot be empty!" \
+                "Command for alias '$alias_name' was not changed."
+            ;;
+        
+        --path)
+            # Edit path only
+            echo "Editing the path for alias '$alias_name'..."
+            edit_file "$current_path" "$COMMAND_STORE/$alias_name.path" \
+                'test -d "$1"' "Error: Path does not exist!" \
+                "Path for alias '$alias_name' was not changed."
+            ;;
+        
+        *)
+            # Edit both command and path
+            echo "Editing the command and path for alias '$alias_name'..."
+            local temp_file
+            temp_file=$(mktemp)
+            echo "$current_command" > "$temp_file"
+            echo "$current_path" >> "$temp_file"
+            ${EDITOR:-nano} "$temp_file"
+
+            local updated_command
+            local updated_path
+            updated_command=$(head -n -1 "$temp_file")
+            updated_path=$(tail -n 1 "$temp_file")
+
+            # Validate and save command and path
+            if [ -z "$updated_command" ]; then
+                echo "Error: Command cannot be empty!"
+                rm -f "$temp_file"
+                return 1
+            fi
+
+            if [ ! -d "$updated_path" ]; then
+                echo "Error: Path '$updated_path' does not exist!"
+                rm -f "$temp_file"
+                return 1
+            fi
+
+            echo "$updated_command" > "$COMMAND_STORE/$alias_name.cmd"
+            echo "$updated_path" > "$COMMAND_STORE/$alias_name.path"
+            echo "Alias '$alias_name' has been updated successfully!"
+
+            # Clean up temporary file
+            rm -f "$temp_file"
+            ;;
+    esac
+}
+
+
+
+list_commands() {
+    # Define color codes for better UI
+    RESET='\033[0m'
+    BOLD='\033[1m'
+    GREEN='\033[0;32m'
+    CYAN='\033[0;36m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[1;34m'
+    
+    # Header
+    echo -e "${BOLD}${CYAN}=== Command List ===${RESET}"
+    echo
+
+    # Check if the command store directory is empty
+    if [ ! "$(find "$COMMAND_STORE" -maxdepth 1 -name "*.cmd" -print -quit)" ]; then
+        echo -e "${YELLOW}No commands found in $COMMAND_STORE.${RESET}"
+        return 0
+    fi
+
+    # Loop through each command file in the COMMAND_STORE
+    find "$COMMAND_STORE" -maxdepth 1 -type f -name "*.cmd" | while read -r cmd_file; do
+        alias_name="${cmd_file##*/}"
+        alias_name="${alias_name%.cmd}"
+        
+        if [[ -f "$cmd_file" ]]; then
+            command=$(<"$cmd_file")
+            default_path=$(<"$COMMAND_STORE/$alias_name.path")
+
+            # Display command details with improved formatting
+            echo -e "${BOLD}${GREEN}Alias:${RESET} $alias_name"
+            echo -e "   ${BOLD}${BLUE}Command:${RESET} $command"
+            echo -e "   ${BOLD}${YELLOW}Default Path:${RESET} $default_path"
+            echo -e "${CYAN}----------------------------${RESET}"
+            echo
+        fi
+    done
+
+    # Footer
+    echo -e "${CYAN}==============================${RESET}"
+}
+
+
+
+remove_alias() {
+    local alias_name="$1"
+    if [ ! -f "$COMMAND_STORE/$alias_name.cmd" ]; then
+        echo "Error: Alias '$alias_name' not found!"
+        return 1
+    fi
+    rm -f "$COMMAND_STORE/$alias_name.cmd" "$COMMAND_STORE/$alias_name.path"
+    echo "Alias '$alias_name' removed successfully."
+}
+
+
+
+export_aliases() {
+    local alias_name="$1"
+    local export_file="all_aliases.export"
+
+    if [ -z "$alias_name" ]; then
+        > "$export_file"
+        for cmd_file in "$COMMAND_STORE"/*.cmd; do
+            if [ -f "$cmd_file" ]; then
+                alias_name=$(basename "$cmd_file" .cmd)
+                command=$(cat "$cmd_file")
+                default_path=$(cat "$COMMAND_STORE/$alias_name.path")
+                echo "save $alias_name \"$command\"" >> "$export_file"
+                echo "  Path: $default_path" >> "$export_file"
+            fi
+        done
+        echo "All aliases exported to '$export_file'."
+    else
+        if [ ! -f "$COMMAND_STORE/$alias_name.cmd" ]; then
+            echo "Error: Alias '$alias_name' not found!"
+            return 1
+        fi
+        command=$(cat "$COMMAND_STORE/$alias_name.cmd")
+        default_path=$(cat "$COMMAND_STORE/$alias_name.path")
+        echo "save $alias_name \"$command\"" >> "$alias_name.export"
+        echo "  Path: $default_path" >> "$alias_name.export"
+        echo "Alias '$alias_name' exported to '$alias_name.export'."
+    fi
+}
+
+
+
+import_aliases() {
+    local file="$1"
+    if [ ! -f "$file" ]; then
+        echo "Error: File '$file' not found!"
+        return 1
+    fi
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^save\ (.+)\ \"(.+)\"$ ]]; then
+            alias_name="${BASH_REMATCH[1]}"
+            command_to_save="${BASH_REMATCH[2]}"
+            save_command "$alias_name" "$command_to_save"
+        fi
+    done < "$file"
+    echo "Aliases imported from '$file'."
+}
+
+
+
+remove_all_aliases() {
+    rm -f "$COMMAND_STORE"/*.cmd
+    rm -f "$COMMAND_STORE"/*.path
+    echo "All aliases removed successfully."
+}

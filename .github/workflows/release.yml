@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+      
+      - name: Set up build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev
+
+      - name: Prepare build directory
+        run: |
+          VERSION=${{ github.ref_name }}
+          VERSION=${VERSION#v}
+
+          mkdir -p build/DEBIAN
+          cp DEBIAN/control build/DEBIAN/control
+          echo "Version: $VERSION" >> build/DEBIAN/control
+          echo "Version: $VERSION" >> DEBIAN/control
+
+      - name: Build .deb package
+        run: |
+          dpkg-deb --build . aliasmate.deb
+      
+      - name: Verify .deb package
+        run: dpkg --info aliasmate.deb
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: "Release ${{ github.ref }}"
+          draft: false
+          prerelease: false
+
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./aliasmate.deb
+          asset_name: aliasmate_${{ github.ref_name }}_amd64.deb
+          asset_content_type: application/vnd.debian.binary-package
+
+      - name: Verify GitHub Release
+        run: |
+          echo "Release successfully created for tag ${{ github.ref_name }}"
+          echo "Asset uploaded: aliasmate_${{ github.ref_name }}_amd64.deb"

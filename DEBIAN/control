@@ -1,0 +1,7 @@
+Package: aliasmate
+Architecture: all
+Maintainer: Akhshy Ganesh <akhshy.balakannan@gmail.com>
+Description: A command-line tool that saves and executes commands by remembering their paths, providing an easy way to manage all your commands.
+Depends: bash
+Priority: optional
+Section: utils
