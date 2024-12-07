@@ -1,43 +1,99 @@
 #!/bin/bash
 
-# Function to load command history from ~/.bash_history
-load_command_history() {
-    history -r ~/.bash_history
-}
+# Function to setup autocomplete for aliasmate
+setup_autocomplete() {
+  # Create the helper directory if it doesn't exist
+  if [ ! -d "$HOME/.alias_mate/helper" ]; then
+    echo "Creating helper directory: $HOME/.alias_mate/helper"
+    mkdir -p "$HOME/.alias_mate/helper"
+  fi
 
-# Function to save commands to ~/.bash_history
-save_to_history() {
-    local command="$*"
-    if [ -n "$command" ]; then
-        echo "$command" >> ~/.bash_history
-        history -a
-    fi
-}
+  AUTOCOMPLETE_FILE="$HOME/.alias_mate/helper/auto-complete.sh"
 
-# Autocomplete function
+  # Create the autocomplete script if it doesn't exist
+  if [ ! -f "$AUTOCOMPLETE_FILE" ]; then
+    echo "Creating autocomplete script at $AUTOCOMPLETE_FILE"
+
+    cat << 'EOF' > "$AUTOCOMPLETE_FILE"
+#!/bin/bash
+
+# Autocomplete function for aliasmate
 autocomplete() {
-    load_command_history  # Ensure history is loaded
-    local cur="${COMP_WORDS[COMP_CWORD]}"  # Current word being completed
-    local prev="${COMP_WORDS[COMP_CWORD-1]}"  # Previous word
-    local aliasmate_commands="save run ls rm export import rm-all update upgrade --help --version"
+    history -a
+    history -r
 
+    # Get the current word and previous word
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Define possible aliasmate commands as complete strings
+    local aliasmate_commands=(
+        "save"
+        "run"
+        "load"
+        "ls"
+        "rm"
+        "export"
+        "import"
+        "rm-all"
+        "--upgrade"
+        "--help"
+        "--version"
+    )
+
+    # Autocomplete logic based on the previous word
     case "$prev" in
-        run|rm)
-            # Suggest aliases saved using "aliasmate save"
-            local suggestions=$(grep -Eo 'aliasmate save [^ ]+' ~/.bash_history | awk '{print $3}' | sort -u)
-            COMPREPLY=($(compgen -W "$suggestions" -- "$cur"))
+        run|rm|import)
+            # File completion for "run", "rm", and "import" commands (only .sh files)
+            local suggestions=$(find "$HOME/.alias_mate/" -maxdepth 1 -type f -name "*.sh" -exec basename {} \;)
+
+            # Filter suggestions that start with the current word
+            suggestions=$(echo "$suggestions" | grep -E "^$cur")
+
+            # Provide the completion
+            COMPREPLY=($(compgen -W "${suggestions}" -- "$cur"))
             ;;
         save)
-            # Suggest recent command history for saving
-            local history_suggestions=$(history | awk '{$1=""; print substr($0,2)}' | sort -u | tail -n 20)
-            COMPREPLY=($(compgen -W "$history_suggestions" -- "$cur"))
+            # Completion based on recent shell history (whole commands, not individual words)
+            local history_suggestions=$(history | tail -n 20 | sed 's/^[ ]*[0-9]\+[ ]*//')
+
+            # Filter the history commands to only those that start with the current input
+            history_suggestions=$(echo "$history_suggestions" | grep -E "^$cur.*")
+
+            # Provide the completion (whole command suggestions)
+            IFS=$'\n' read -r -d '' -a history_suggestions <<< "$history_suggestions"
+            COMPREPLY=("${history_suggestions[@]}")
             ;;
         *)
-            # Default suggestions for aliasmate commands
-            COMPREPLY=($(compgen -W "$aliasmate_commands" -- "$cur"))
+            # Default command completions
+            COMPREPLY=($(compgen -W "$(echo "${aliasmate_commands[@]}")" -- "$cur"))
             ;;
     esac
 }
 
-# Register the autocomplete function
+# Register the autocomplete function for aliasmate
 complete -F autocomplete aliasmate
+EOF
+
+    # Make the file executable
+    chmod +x "$AUTOCOMPLETE_FILE"
+    echo "Autocomplete script created successfully."
+  fi
+
+  # Check if the auto-complete script is already sourced in .bashrc
+  if ! grep -q 'auto-complete.sh' "$HOME/.bashrc"; then
+    echo "Appending to .bashrc to source autocomplete script"
+    echo "
+# Source the auto-complete script
+[ -s \"$HOME/.alias_mate/helper/auto-complete.sh\" ] && \. \"$HOME/.alias_mate/helper/auto-complete.sh\"
+" >> "$HOME/.bashrc"
+  fi
+
+  # Source the .bashrc to load changes
+  source "$HOME/.bashrc"
+
+  # Register the autocomplete function if not already registered
+  if ! complete -p aliasmate &>/dev/null; then
+    complete -F autocomplete aliasmate
+  fi
+}

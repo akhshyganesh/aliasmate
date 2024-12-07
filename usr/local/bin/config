@@ -5,7 +5,7 @@ COMMAND_STORE="$HOME/.alias_mate"
 
 # Function to show help message
 show_help() {
-    cat << EOF
+  cat << EOF
 Usage: aliasmate [OPTIONS] COMMAND [ARGUMENTS]
 
 A tool to manage aliases with associated commands and default paths.
@@ -15,26 +15,45 @@ Options:
   --version, -v             Show the version of the installed package
   --update, --upgrade       Self-update the aliasmate application
 
+Commands:
   ls                        List all saved commands with their aliases and default paths
   rm <alias>                Remove a saved alias
   export [alias]            Export aliases to a file (or all if no alias is provided)
   import <file>             Import aliases from a file
   rm-all                    Remove all saved aliases
   save <alias> <command>    Save a command with an alias
-  run <alias> --path <path> --args <args> Run a saved command by alias with an optional custom path
+  load <alias>              Load environment variables from an alias
+  run <alias>               Run a saved command by alias with optional --path and --args
+  edit <alias> [--cmd|--path] Edit a saved alias' command or path
+  auto-complete             Setup bash completion for aliasmate commands
 
 Examples:
-  aliasmate save myalias "echo Hello, World!"
-  aliasmate run myalias
-  aliasmate ls
-  aliasmate rm myalias
-  aliasmate export
-  aliasmate import myaliases.txt
-  aliasmate --upgrade
+
+Simple Example Usage:
+  Save and run a simple command:
+    aliasmate save greet "echo Hello, World!"
+    aliasmate run greet
+
+Advanced Example Usage:
+  Save a command with a custom path and run with additional arguments:
+    aliasmate save long_listing "ls -la"
+    aliasmate run long_listing --path /home/user/Documents --args ""
+
+  Edit a saved alias' command or path:
+    aliasmate edit greet --cmd  
+    aliasmate edit greet --path
+
+  Import and export aliases:
+    aliasmate export
+    aliasmate import ~/backup_aliases.txt
+
+  List and remove aliases:
+    aliasmate ls
+    aliasmate rm greet
+    aliasmate rm-all
+
+  Use auto-complete:
+    aliasmate auto-complete
+
 EOF
 }
-
-# Save the current command to history (avoid recursion)
-if [[ "$BASH_SOURCE" == "$0" ]]; then
-    save_to_history "$0 $*"
-fi
