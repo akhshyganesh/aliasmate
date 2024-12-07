@@ -106,3 +106,17 @@ upgrade_aliasmate() {
     echo "Update complete!"
     exit
 }
+
+convert_cmd_sh() {
+    # Support older versions <= 0.1.5
+    # Convert .cmd to .sh
+    if [ -d "$HOME/.alias_mate" ]; then
+        for file in "$HOME/.alias_mate"/*; do
+            # If file name is .cmd then rename it as .sh
+            if [[ "$file" == *".cmd" ]]; then
+                mv "$file" "${file}.sh"
+                chmod +x "${file}.sh"
+            fi
+        done
+    fi
+}

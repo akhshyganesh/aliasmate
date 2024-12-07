@@ -25,8 +25,10 @@ jobs:
 
           mkdir -p build/DEBIAN
           cp DEBIAN/control build/DEBIAN/control
-          echo "Version: $VERSION" >> build/DEBIAN/control
-          echo "Version: $VERSION" >> DEBIAN/control
+
+          # Replace the "Version" line in both build/DEBIAN/control and DEBIAN/control
+          sed -i "s/^Version: .*/Version: $VERSION/" build/DEBIAN/control
+          sed -i "s/^Version: .*/Version: $VERSION/" DEBIAN/control
 
       - name: Build .deb package
         run: |

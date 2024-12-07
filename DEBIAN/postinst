@@ -1,53 +1,11 @@
 #!/bin/bash
 
-echo "Setting up configuration for aliasmate"
+echo "Running aliasmate setup script..."
 
-# Copy default configuration file if not present
-cp /etc/aliasmate/config.conf /etc/aliasmate/config.conf.default
-
-# Add the autocomplete function to .bashrc if it's not already there
-if ! grep -q 'autocomplete() {' ~/.bashrc; then
-    cat << 'EOF' >> ~/.bashrc
-
-# Autocomplete function for aliasmate
-autocomplete() {
-    history -a
-    history -r
-    
-    # Get the current word and previous word
-    local cur="${COMP_WORDS[COMP_CWORD]}"
-    local prev="${COMP_WORDS[COMP_CWORD-1]}"
-    
-    # Define possible aliasmate commands
-    local aliasmate_commands="save run ls rm export import rm-all --update --upgrade --help --version"
-
-    # Autocomplete logic based on previous word
-    case "$prev" in
-        run|rm)
-            local suggestions=$(grep -Eo 'aliasmate save [^ ]+' ~/.bash_history | awk '{print $3}' | sort -u)
-            COMPREPLY=($(compgen -W "$suggestions" -- "$cur"))
-            ;;
-        save)
-            local history_suggestions=$(history | awk '{$1=""; print substr($0,2)}' | sort -u | tail -n 20)
-            COMPREPLY=($(compgen -W "$history_suggestions" -- "$cur"))
-            ;;
-        *)
-            COMPREPLY=($(compgen -W "$aliasmate_commands" -- "$cur"))
-            ;;
-    esac
-}
-EOF
+# Ensure the .alias_mate directory exists for the user
+if [ ! -d "$HOME/.alias_mate" ]; then
+    echo "Creating directory: $HOME/.alias_mate"
+    mkdir -p "$HOME/.alias_mate"
 fi
 
-# Ensure the autocomplete command is set for aliasmate in .bashrc
-if ! grep -q 'complete -F autocomplete aliasmate' ~/.bashrc; then
-    echo 'complete -F autocomplete aliasmate' >> ~/.bashrc
-fi
-
-# Source .bashrc to apply changes in the current session
-if [[ $- =~ i ]]; then
-    source ~/.bashrc
-fi
-
-echo "aliasmate autocomplete installed successfully"
 echo "Run 'aliasmate --help' to get started"

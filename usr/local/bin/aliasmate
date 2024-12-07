@@ -7,6 +7,8 @@ source "$(dirname "$0")/commands"
 source "$(dirname "$0")/utils"
 
 check_version
+convert_cmd_sh
+setup_autocomplete
 
 # Main logic to parse arguments
 case "$1" in
@@ -25,6 +27,14 @@ case "$1" in
             exit 1
         fi
         save_command "$2" "$3"
+        ;;
+    load)
+        echo "$2"
+        if [ -z "$2" ]; then
+            echo "Usage: $0 load <alias>"
+            exit 1
+        fi
+        load_command "$2"
         ;;
     run)
         if [ -z "$2" ]; then
